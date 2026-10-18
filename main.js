@@ -6,11 +6,73 @@ controls.minPolarAngle = Math.PI / 3;
 controls.maxPolarAngle = Math.PI / 3;
 controls.enablePan = false;
 
+const uiStyle = document.createElement('style');
+uiStyle.textContent = `
+#ui-backdrop{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:none;z-index:90}
+#shelter-ui{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,255,255,0.95);padding:24px;border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,0.3);font-family:Arial,sans-serif;min-width:300px;display:none;z-index:100}
+#close-btn{position:absolute;top:10px;right:10px;background:#ff4444;color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;line-height:28px;text-align:center}
+#close-btn:hover{background:#cc0000}
+#ui-eq{display:block;margin-top:10px;padding-left:10px;border-left:3px solid #555;line-height:1.6;font-size:16px}
+#solve-btn{display:none;margin-top:15px;padding:10px;background:#2ecc71;color:white;border:none;border-radius:5px;cursor:pointer;font-size:16px;width:100%;font-weight:bold}
+#solve-btn:hover{background:#27ae60}
+`;
+document.head.appendChild(uiStyle);
+
+const backdrop = document.createElement('div');
+backdrop.id = 'ui-backdrop';
+document.body.appendChild(backdrop);
+
+const uiPanel = document.createElement('div');
+uiPanel.id = 'shelter-ui';
+uiPanel.innerHTML = '<button id="close-btn">×</button><h2>Rifugio <span id="ui-id"></span></h2><p><strong>Stato:</strong> <span id="ui-status"></span></p><p><strong>Metodo:</strong> <span id="ui-method"></span></p><p><strong>Sistema:</strong></p><span id="ui-eq"></span><button id="solve-btn">Risolto!</button>';
+document.body.appendChild(uiPanel);
+
+const closeBtn = document.getElementById('close-btn');
+const solveBtn = document.getElementById('solve-btn');
+
+function openUI() {
+    backdrop.style.display = 'block';
+    uiPanel.style.display = 'block';
+    controls.enabled = false;
+}
+
+function closeUI() {
+    backdrop.style.display = 'none';
+    uiPanel.style.display = 'none';
+    controls.enabled = true;
+}
+
+closeBtn.addEventListener('click', closeUI);
+
+const sistemiData = [
+    { eq: ['x - y = 3', 'x + y = 9'], method: 'Sostituzione' },
+    { eq: ['2x - 5y = 7', 'x - 3y = 1'], method: 'Sostituzione' },
+    { eq: ['x/4 - y/2 = 1', 'x/6 - y = -2'], method: 'Sostituzione' },
+    { eq: ['2(x - 3) = -1 + y', 'x - (1 - y) = 6'], method: 'Sostituzione' },
+    { eq: ['3x - y = -1', 'x + y = 5'], method: 'Confronto' },
+    { eq: ['4x - y = 7', '4x + 3y = -1'], method: 'Confronto' },
+    { eq: ['-2x - 1 = 5y', '3y - 9 = 2x'], method: 'Confronto' },
+    { eq: ['3y + 24 + (y - 2)^2 + 4y = 4x + y^2 + 4', '3x + 2y = 1'], method: 'Confronto' },
+    { eq: ['x - y = 4', 'x + 3y = 8'], method: 'Riduzione' },
+    { eq: ['2x - 3y = 5', '-x + 2y = -3'], method: 'Riduzione' },
+    { eq: ['3x + 7y = 2', '4x - 2y = -3'], method: 'Riduzione' },
+    { eq: ['3x - 4 = 5y', '2y + x = 1'], method: 'Riduzione' },
+    { eq: ['3x - y = 1', '2x + 3y = 8'], method: 'Cramer' },
+    { eq: ['2x - 4 + y^2 = y(y - 3) + 16', '2x - 3y = 8'], method: 'Cramer' },
+    { eq: ['2/3y + 1/5x = 5', '2x - 5/6y + 3 = 8'], method: 'Cramer' },
+    { eq: ['(x + 2y)/3 + 1 = 1/3', '3x + 5y = -4'], method: 'Cramer' }
+];
+
 const shelters = Array.from({length: 16}, (_, i) => {
     let status = 'upcoming';
     if (i === 0) status = 'current';
-    else if (i < 4) status = 'completed';
-    return { id: i, status, method: '', eq: ['', ''], solution: {x: 0, y: 0} };
+    return { 
+        id: i, 
+        status: status, 
+        method: sistemiData[i].method, 
+        eq: sistemiData[i].eq, 
+        solution: {x: 0, y: 0} 
+    };
 });
 
 const shelterGroup = new THREE.Group();
@@ -20,17 +82,13 @@ const PATH_HEIGHT = 11.0;
 const PATH_TURNS = 3;
 const PATH_MARGIN = 0.03;
 const PATH_WIDTH = 2.0;
-const PATH_THICKNESS = 0.3;
 const PATH_OFFSET = 0.5;
-
-const MOUNTAIN_APEX_Y = 17;
 const GRASS_COLOR_TOP = 0x6b9f35;
 const GRASS_COLOR_BOTTOM = 0x3e6a1a;
 const GROUND_TOP_Y = -4.5;
 const SHELTER_SCALE = 1.0;
 const GRASS_LIFT = 0.02;
 
-// ------- helper per far rimpicciolire il sentiero verso la cima -------
 function topTaper(t) {
     return THREE.MathUtils.clamp((t - 0.55) / 0.45, 0, 1);
 }
@@ -66,9 +124,6 @@ function findMountainMeshes() {
 }
 
 const mountainMeshes = findMountainMeshes();
-if (mountainMeshes.length === 0) {
-    console.warn('Montagna non trovata: uso il cono liscio come riferimento');
-}
 
 function mountainRadiusAt(y) {
     const localY = y - 5;
@@ -118,15 +173,12 @@ function getFacing(angle, y) {
     return sum.lengthSq() > 1e-6 ? sum.normalize() : out;
 }
 
-// ------------------------------------------------------------------
-// SENTIERO A TERRAZZE (solido pieno: terra + pendio erboso)
-// ------------------------------------------------------------------
-const TERRACE_WALL   = 0.95;  // altezza del muro di terra sotto il bordo
-const TERRACE_BATTER = 0.70;  // quanto rientra il muro scendendo
+const TERRACE_WALL = 0.95;
+const TERRACE_BATTER = 0.70;
 
 function createTerraceMesh() {
     const steps = 720;
-    const ROWS = 9;                 // 0-2 terra, 3-8 pendio erboso
+    const ROWS = 9;
     const SLOPE_ROWS = ROWS - 3;
     const turnDrop = PATH_HEIGHT / PATH_TURNS;
     const BLEND = 0.04;
@@ -137,10 +189,10 @@ function createTerraceMesh() {
     const colors = [];
     const indices = [];
 
-    const dirtTop    = new THREE.Color(0x9b8560);
+    const dirtTop = new THREE.Color(0x9b8560);
     const dirtBottom = new THREE.Color(0x6d5638);
-    const grassTop   = new THREE.Color(GRASS_COLOR_TOP);
-    const grassBottom= new THREE.Color(GRASS_COLOR_BOTTOM);
+    const grassTop = new THREE.Color(GRASS_COLOR_TOP);
+    const grassBottom = new THREE.Color(GRASS_COLOR_BOTTOM);
     const col = new THREE.Color();
 
     const pushVertex = (r, yy, c, s) => {
@@ -154,15 +206,14 @@ function createTerraceMesh() {
         const c = Math.cos(angle);
         const s = Math.sin(angle);
         const halfW = pathWidthAt(t) / 2;
-        const rIn  = radius - halfW;      // dentro la montagna
-        const rOut = radius + halfW;      // bordo esterno del sentiero
+        const rIn = radius - halfW;
+        const rOut = radius + halfW;
 
         const shrink = pathWidthAt(t) / PATH_WIDTH;
-        const wallH  = TERRACE_WALL   * shrink;
+        const wallH = TERRACE_WALL * shrink;
         const batter = TERRACE_BATTER * shrink;
 
-        const f = THREE.MathUtils.clamp(
-            (t - 1 / PATH_TURNS + PATH_MARGIN) / BLEND, 0, 1);
+        const f = THREE.MathUtils.clamp((t - 1 / PATH_TURNS + PATH_MARGIN) / BLEND, 0, 1);
         const lowY = GROUND_TOP_Y + (y - turnDrop - GROUND_TOP_Y) * f;
 
         const wallBotY = y - wallH;
@@ -170,19 +221,15 @@ function createTerraceMesh() {
 
         const shade = 1 + 0.05 * Math.sin(angle * 6 + y * 1.3);
 
-        // 0 - bordo interno, sepolto nella montagna
         col.copy(dirtTop).multiplyScalar(shade);
         pushVertex(rIn, y, c, s);
 
-        // 1 - bordo esterno della superficie calpestabile
         col.copy(dirtTop).multiplyScalar(shade * 0.97);
         pushVertex(rOut, y, c, s);
 
-        // 2 - piede del muro di terra
         col.copy(dirtBottom).multiplyScalar(shade);
         pushVertex(wallBotR, wallBotY, c, s);
 
-        // 3..8 - pendio erboso che scende al terrapieno inferiore
         for (let j = 3; j < ROWS; j++) {
             const v = (j - 2) / SLOPE_ROWS;
             let ry = wallBotY + (lowY - wallBotY) * v;
@@ -191,7 +238,7 @@ function createTerraceMesh() {
             const surf = sampleSurface(angle, ry);
             const baseR = (surf ? surf.radius : mountainRadiusAt(ry)) + GRASS_LIFT;
 
-            const w  = smoothstep(v, 0, 0.32);
+            const w = smoothstep(v, 0, 0.32);
             const rr = wallBotR + (baseR - wallBotR) * w;
 
             col.copy(grassTop).lerp(grassBottom, v).multiplyScalar(shade);
@@ -208,17 +255,16 @@ function createTerraceMesh() {
         }
     }
 
-    // tappi alle estremità della spirale: il terrapieno diventa un solido chiuso
     const firstCol = 0;
-    const lastCol  = steps * ROWS;
+    const lastCol = steps * ROWS;
     for (let j = 0; j < ROWS - 2; j++) {
         indices.push(firstCol, firstCol + j + 1, firstCol + j + 2);
-        indices.push(lastCol,  lastCol  + j + 2, lastCol  + j + 1);
+        indices.push(lastCol, lastCol + j + 2, lastCol + j + 1);
     }
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('color',    new THREE.Float32BufferAttribute(colors, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geo.setIndex(indices);
     geo.computeVertexNormals();
 
@@ -231,19 +277,6 @@ function createTerraceMesh() {
 }
 
 shelterGroup.add(createTerraceMesh());
-
-// Piattaforma sommitale: un disco di terra che "chiude" la spirale,
-// così l'ultimo rifugio non sembra sospeso nel vuoto.
-function createSummitPlatform() {
-    const top = getPathPoint(1);
-    const r = pathWidthAt(1) * 1.6;
-    const geo = new THREE.CylinderGeometry(r, r * 1.15, PATH_THICKNESS, 20);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x8c7853, flatShading: true });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(top.pos.x * 0.55, top.y - PATH_THICKNESS / 2, top.pos.z * 0.55);
-    return mesh;
-}
-shelterGroup.add(createSummitPlatform());
 
 function getShelterColor(status) {
     switch (status) {
@@ -283,6 +316,7 @@ function createShelterMesh(status) {
     roof.rotation.y = Math.PI / 2;
     roof.position.y = 0.62;
     group.add(roof);
+    group.userData.roof = roof;
 
     addBox(0.24, 0.26, 0.04, 0, 0.13, 0.46, DARK_WOOD);
     addBox(0.4, 0.05, 0.14, 0, 0.025, 0.52, STONE);
@@ -307,10 +341,13 @@ function createShelterMesh(status) {
 
     addBox(0.14, 0.4, 0.14, 0.5, 0.92, -0.1, 0x555555);
     addBox(0.025, 0.4, 0.025, -0.8, 1.17, 0, DARK_WOOD);
-    addBox(0.22, 0.13, 0.015, -0.68, 1.3, 0, getShelterColor(status));
+    const flag = addBox(0.22, 0.13, 0.015, -0.68, 1.3, 0, getShelterColor(status));
+    group.userData.flag = flag;
 
     return group;
 }
+
+const shelterMeshes = [];
 
 shelters.forEach((shelter, index) => {
     const itemGroup = new THREE.Group();
@@ -330,18 +367,131 @@ shelters.forEach((shelter, index) => {
     itemGroup.lookAt(pos.clone().add(getFacing(angle, y)));
 
     const before = getPathPoint(Math.max(t - 0.01, -PATH_MARGIN)).pos;
-    const after  = getPathPoint(Math.min(t + 0.01, 1 + PATH_MARGIN)).pos;
+    const after = getPathPoint(Math.min(t + 0.01, 1 + PATH_MARGIN)).pos;
     const run = Math.hypot(after.x - before.x, after.z - before.z);
     itemGroup.rotateZ(-Math.atan2(after.y - before.y, run));
 
     itemGroup.traverse((child) => {
-        child.userData = { shelterId: shelter.id };
+        child.userData = { shelterId: shelter.id, rootGroup: itemGroup };
     });
 
+    shelterMeshes.push(itemGroup);
     shelterGroup.add(itemGroup);
 });
 
 scene.add(shelterGroup);
+
+function updateShelterColor(id, status) {
+    const itemGroup = shelterMeshes[id];
+    if (itemGroup && itemGroup.children[0]) {
+        const shelterMesh = itemGroup.children[0];
+        if (shelterMesh.userData.roof) {
+            shelterMesh.userData.roof.material.color.setHex(getShelterColor(status));
+        }
+        if (shelterMesh.userData.flag) {
+            shelterMesh.userData.flag.material.color.setHex(getShelterColor(status));
+        }
+    }
+}
+
+const mouse = new THREE.Vector2();
+const interactRaycaster = new THREE.Raycaster();
+let hoveredShelter = null;
+let activeShelterId = null;
+
+solveBtn.addEventListener('click', () => {
+    if (activeShelterId !== null && shelters[activeShelterId].status === 'current') {
+        shelters[activeShelterId].status = 'completed';
+        updateShelterColor(activeShelterId, 'completed');
+
+        if (activeShelterId + 1 < shelters.length) {
+            shelters[activeShelterId + 1].status = 'current';
+            updateShelterColor(activeShelterId + 1, 'current');
+        }
+
+        closeUI();
+        activeShelterId = null;
+    }
+});
+
+window.addEventListener('mousemove', (event) => {
+    if (uiPanel.style.display === 'block') return;
+
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    interactRaycaster.setFromCamera(mouse, camera);
+    const intersects = interactRaycaster.intersectObjects(shelterMeshes, true);
+
+    if (intersects.length > 0) {
+        const hit = intersects[0].object;
+        const shelterId = hit.userData.shelterId;
+
+        if (shelterId !== undefined) {
+            const rootGroup = hit.userData.rootGroup;
+            document.body.style.cursor = 'pointer';
+
+            if (hoveredShelter !== rootGroup) {
+                if (hoveredShelter) {
+                    hoveredShelter.traverse(child => {
+                        if (child.isMesh) child.material.emissive.setHex(0x000000);
+                    });
+                }
+                hoveredShelter = rootGroup;
+                hoveredShelter.traverse(child => {
+                    if (child.isMesh) child.material.emissive.setHex(0x444444);
+                });
+            }
+        }
+    } else {
+        document.body.style.cursor = 'default';
+        if (hoveredShelter) {
+            hoveredShelter.traverse(child => {
+                if (child.isMesh) child.material.emissive.setHex(0x000000);
+            });
+            hoveredShelter = null;
+        }
+    }
+});
+
+window.addEventListener('click', (event) => {
+    if (uiPanel.style.display === 'block') return;
+
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    interactRaycaster.setFromCamera(mouse, camera);
+    const intersects = interactRaycaster.intersectObjects(shelterMeshes, true);
+
+    if (intersects.length > 0) {
+        const hit = intersects[0].object;
+        const shelterId = hit.userData.shelterId;
+
+        if (shelterId !== undefined) {
+            const shelter = shelters[shelterId];
+            activeShelterId = shelterId;
+
+            document.getElementById('ui-id').textContent = shelterId + 1;
+            document.getElementById('ui-method').textContent = shelter.method;
+            document.getElementById('ui-eq').innerHTML = `${shelter.eq[0]}<br>${shelter.eq[1]}`;
+
+            const statusText = document.getElementById('ui-status');
+
+            if (shelter.status === 'current') {
+                solveBtn.style.display = 'block';
+                statusText.textContent = "Sei in questa casa.";
+            } else if (shelter.status === 'completed') {
+                solveBtn.style.display = 'none';
+                statusText.textContent = "Risolta!";
+            } else {
+                solveBtn.style.display = 'none';
+                statusText.textContent = "Lockato";
+            }
+
+            openUI();
+        }
+    }
+});
 
 animate();
 window.addEventListener('resize', () => {
