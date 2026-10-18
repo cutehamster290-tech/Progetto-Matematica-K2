@@ -12,8 +12,11 @@ const renderer = new t.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
 
 const ambientLight = new t.AmbientLight(0xffffff, 0.4);
-const sunLight = new t.DirectionalLight(0xffffff, 0.8);
+const sunLight = new t.DirectionalLight(0xffffff, 0.6);
 sunLight.position.set(10, 20, 10);
+
+const fillLight = new t.DirectionalLight(0xffffff, 0.4);
+fillLight.position.set(-10, 10, -10);
 
 const groundGeo = new t.CylinderGeometry(20, 22, 2, 8);
 const groundMat = new t.MeshStandardMaterial({ color: 0x3a5f0b, flatShading: true });
@@ -37,6 +40,7 @@ scene.add(snowParticles);
 scene.add(ground);
 scene.add(montain);
 scene.add(sunLight);
+scene.add(fillLight);
 scene.add(ambientLight);
 
 spawnTrees(20);

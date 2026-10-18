@@ -8,6 +8,7 @@ controls.enablePan = false;
 
 const uiStyle = document.createElement('style');
 uiStyle.textContent = `
+body { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
 #ui-backdrop{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:none;z-index:90}
 #shelter-ui{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,255,255,0.95);padding:24px;border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,0.3);font-family:Arial,sans-serif;min-width:300px;display:none;z-index:100}
 #close-btn{position:absolute;top:10px;right:10px;background:#ff4444;color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;line-height:28px;text-align:center}
@@ -278,6 +279,20 @@ function createTerraceMesh() {
 
 shelterGroup.add(createTerraceMesh());
 
+const groundSnowGeo = new THREE.CylinderGeometry(19.8, 21.8, 0.2, 8);
+const groundSnowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true });
+const groundSnow = new THREE.Mesh(groundSnowGeo, groundSnowMat);
+groundSnow.position.set(0, -4.4, 0);
+scene.add(groundSnow);
+
+scene.traverse((child) => {
+    if (child.isMesh && child.geometry.type === 'ConeGeometry' && child.geometry.parameters.radius === 2) {
+        const snow = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2, 5), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }));
+        snow.position.y = 1.5;
+        child.add(snow);
+    }
+});
+
 function getShelterColor(status) {
     switch (status) {
         case 'current': return 0xff2222;
@@ -312,11 +327,12 @@ function createShelterMesh(status) {
     roofShape.closePath();
     const roofGeo = new THREE.ExtrudeGeometry(roofShape, { depth: 1.8, bevelEnabled: false });
     roofGeo.translate(0, 0, -0.9);
+    
     const roof = new THREE.Mesh(roofGeo, mat(getShelterColor(status)));
     roof.rotation.y = Math.PI / 2;
     roof.position.y = 0.62;
+    roof.userData.isRoof = true;
     group.add(roof);
-    group.userData.roof = roof;
 
     addBox(0.24, 0.26, 0.04, 0, 0.13, 0.46, DARK_WOOD);
     addBox(0.4, 0.05, 0.14, 0, 0.025, 0.52, STONE);
@@ -342,7 +358,7 @@ function createShelterMesh(status) {
     addBox(0.14, 0.4, 0.14, 0.5, 0.92, -0.1, 0x555555);
     addBox(0.025, 0.4, 0.025, -0.8, 1.17, 0, DARK_WOOD);
     const flag = addBox(0.22, 0.13, 0.015, -0.68, 1.3, 0, getShelterColor(status));
-    group.userData.flag = flag;
+    flag.userData.isFlag = true;
 
     return group;
 }
@@ -372,7 +388,8 @@ shelters.forEach((shelter, index) => {
     itemGroup.rotateZ(-Math.atan2(after.y - before.y, run));
 
     itemGroup.traverse((child) => {
-        child.userData = { shelterId: shelter.id, rootGroup: itemGroup };
+        child.userData.shelterId = shelter.id;
+        child.userData.rootGroup = itemGroup;
     });
 
     shelterMeshes.push(itemGroup);
@@ -383,14 +400,13 @@ scene.add(shelterGroup);
 
 function updateShelterColor(id, status) {
     const itemGroup = shelterMeshes[id];
-    if (itemGroup && itemGroup.children[0]) {
-        const shelterMesh = itemGroup.children[0];
-        if (shelterMesh.userData.roof) {
-            shelterMesh.userData.roof.material.color.setHex(getShelterColor(status));
-        }
-        if (shelterMesh.userData.flag) {
-            shelterMesh.userData.flag.material.color.setHex(getShelterColor(status));
-        }
+    if (itemGroup) {
+        itemGroup.traverse((child) => {
+            if (child.userData.isRoof || child.userData.isFlag) {
+                child.material.color.setHex(getShelterColor(status));
+                child.material.needsUpdate = true;
+            }
+        });
     }
 }
 
@@ -479,7 +495,7 @@ window.addEventListener('click', (event) => {
 
             if (shelter.status === 'current') {
                 solveBtn.style.display = 'block';
-                statusText.textContent = "Sei in questa casa.";
+                statusText.textContent = "Sei in questo rifugio.";
             } else if (shelter.status === 'completed') {
                 solveBtn.style.display = 'none';
                 statusText.textContent = "Risolta!";
