@@ -8,7 +8,7 @@ controls.enablePan = false;
 
 const uiStyle = document.createElement('style');
 uiStyle.textContent = `
-body { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
+body { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; touch-action: none; }
 #ui-backdrop{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:none;z-index:90}
 #shelter-ui{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,255,255,0.95);padding:24px;border-radius:12px;box-shadow:0 8px 16px rgba(0,0,0,0.3);font-family:Arial,sans-serif;min-width:300px;display:none;z-index:100}
 #close-btn{position:absolute;top:10px;right:10px;background:#ff4444;color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;line-height:28px;text-align:center}
@@ -470,11 +470,11 @@ window.addEventListener('mousemove', (event) => {
     }
 });
 
-window.addEventListener('click', (event) => {
+function handleInteraction(clientX, clientY) {
     if (uiPanel.style.display === 'block') return;
 
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    mouse.x = (clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
 
     interactRaycaster.setFromCamera(mouse, camera);
     const intersects = interactRaycaster.intersectObjects(shelterMeshes, true);
@@ -507,7 +507,17 @@ window.addEventListener('click', (event) => {
             openUI();
         }
     }
+}
+
+window.addEventListener('click', (event) => {
+    handleInteraction(event.clientX, event.clientY);
 });
+
+window.addEventListener('touchstart', (event) => {
+    if (event.touches.length > 0) {
+        handleInteraction(event.touches[0].clientX, event.touches[0].clientY);
+    }
+}, { passive: true });
 
 animate();
 window.addEventListener('resize', () => {
