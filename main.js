@@ -1,5 +1,12 @@
 document.body.appendChild(renderer.domElement);
 
+const playBtn = document.getElementById('play-btn');
+const mainMenu = document.getElementById('main-menu');
+
+playBtn.addEventListener('click', () => {
+    mainMenu.classList.add('hidden');
+});
+
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.minPolarAngle = Math.PI / 3;
@@ -524,6 +531,26 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+const settingsBtn = document.getElementById('settings-btn');
+const settingsPanel = document.getElementById('settings-panel');
+const lightSlider = document.getElementById('light-slider');
+
+settingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.toggle('active');
+});
+
+const baseAmbient = ambientLight.intensity;
+const baseSun = sunLight.intensity;
+const baseFill = fillLight.intensity;
+
+lightSlider.addEventListener('input', (event) => {
+    const multiplier = parseFloat(event.target.value);
+    
+    ambientLight.intensity = baseAmbient * multiplier;
+    sunLight.intensity = baseSun * multiplier;
+    fillLight.intensity = baseFill * multiplier;
 });
 
 function animate() {
