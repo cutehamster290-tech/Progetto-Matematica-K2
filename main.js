@@ -21,8 +21,15 @@ body { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms
 #close-btn{position:absolute;top:10px;right:10px;background:#ff4444;color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;line-height:28px;text-align:center}
 #close-btn:hover{background:#cc0000}
 #ui-eq{display:block;margin-top:10px;padding-left:10px;border-left:3px solid #555;line-height:1.6;font-size:16px}
-#solve-btn{display:none;margin-top:15px;padding:10px;background:#2ecc71;color:white;border:none;border-radius:5px;cursor:pointer;font-size:16px;width:100%;font-weight:bold}
+#solve-btn{display:none;margin-top:15px;padding:10px;background:#2ecc71;color:white;border:none;border-radius:5px;cursor:pointer;font-size:16px;width:100%;font-weight:bold;transition: background-color 0.2s, opacity 0.2s;}
 #solve-btn:hover{background:#27ae60}
+#solve-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+#solution-inputs { display: flex; gap: 20px; margin: 15px 0; align-items: center; }
+#solution-inputs label { font-size: 18px; font-weight: bold; }
+#solution-inputs input { width: 80px; padding: 6px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+#solution-inputs input:disabled { background: #f0f0f0; color: #555; }
+#solve-feedback { text-align: center; margin-top: 10px; font-weight: bold; opacity: 0; transition: opacity 0.3s; height: 20px; font-size: 16px; }
+#shift-hint { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); color: white; font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; text-shadow: 1px 1px 4px rgba(0,0,0,0.9); display: none; z-index: 100; pointer-events: none; text-align: center; }
 `;
 document.head.appendChild(uiStyle);
 
@@ -30,45 +37,68 @@ const backdrop = document.createElement('div');
 backdrop.id = 'ui-backdrop';
 document.body.appendChild(backdrop);
 
+const shiftHint = document.createElement('div');
+shiftHint.id = 'shift-hint';
+shiftHint.textContent = '(cliccare il pulsante "Risolto!" tenendo premuto Shift + Click per saltare il rifugio)';
+document.body.appendChild(shiftHint);
+
 const uiPanel = document.createElement('div');
 uiPanel.id = 'shelter-ui';
-uiPanel.innerHTML = '<button id="close-btn">×</button><h2>Rifugio <span id="ui-id"></span></h2><p><strong>Stato:</strong> <span id="ui-status"></span></p><p><strong>Metodo:</strong> <span id="ui-method"></span></p><p><strong>Sistema:</strong></p><span id="ui-eq"></span><button id="solve-btn">Risolto!</button>';
+uiPanel.innerHTML = `
+    <button id="close-btn">×</button>
+    <h2>Rifugio <span id="ui-id"></span></h2>
+    <p><strong>Stato:</strong> <span id="ui-status"></span></p>
+    <p><strong>Metodo:</strong> <span id="ui-method"></span></p>
+    <p><strong>Sistema:</strong></p>
+    <span id="ui-eq"></span>
+    <div id="solution-inputs">
+        <label>x = <input type="number" id="input-x" step="any"></label>
+        <label>y = <input type="number" id="input-y" step="any"></label>
+    </div>
+    <button id="solve-btn">Risolto!</button>
+    <div id="solve-feedback"></div>
+`;
 document.body.appendChild(uiPanel);
 
 const closeBtn = document.getElementById('close-btn');
 const solveBtn = document.getElementById('solve-btn');
+const inputX = document.getElementById('input-x');
+const inputY = document.getElementById('input-y');
+const solveFeedback = document.getElementById('solve-feedback');
 
 function openUI() {
     backdrop.style.display = 'block';
     uiPanel.style.display = 'block';
+    shiftHint.style.display = 'block';
     controls.enabled = false;
 }
 
 function closeUI() {
     backdrop.style.display = 'none';
     uiPanel.style.display = 'none';
+    shiftHint.style.display = 'none';
     controls.enabled = true;
 }
 
 closeBtn.addEventListener('click', closeUI);
 
 const sistemiData = [
-    { eq: ['x - y = 3', 'x + y = 9'], method: 'Sostituzione' },
-    { eq: ['2x - 5y = 7', 'x - 3y = 1'], method: 'Sostituzione' },
-    { eq: ['x/4 - y/2 = 1', 'x/6 - y = -2'], method: 'Sostituzione' },
-    { eq: ['2(x - 3) = -1 + y', 'x - (1 - y) = 6'], method: 'Sostituzione' },
-    { eq: ['3x - y = -1', 'x + y = 5'], method: 'Confronto' },
-    { eq: ['4x - y = 7', '4x + 3y = -1'], method: 'Confronto' },
-    { eq: ['-2x - 1 = 5y', '3y - 9 = 2x'], method: 'Confronto' },
-    { eq: ['3y + 24 + (y - 2)^2 + 4y = 4x + y^2 + 4', '3x + 2y = 1'], method: 'Confronto' },
-    { eq: ['x - y = 4', 'x + 3y = 8'], method: 'Riduzione' },
-    { eq: ['2x - 3y = 5', '-x + 2y = -3'], method: 'Riduzione' },
-    { eq: ['3x + 7y = 2', '4x - 2y = -3'], method: 'Riduzione' },
-    { eq: ['3x - 4 = 5y', '2y + x = 1'], method: 'Riduzione' },
-    { eq: ['3x - y = 1', '2x + 3y = 8'], method: 'Cramer' },
-    { eq: ['2x - 4 + y^2 = y(y - 3) + 16', '2x - 3y = 8'], method: 'Cramer' },
-    { eq: ['2/3y + 1/5x = 5', '2x - 5/6y + 3 = 8'], method: 'Cramer' },
-    { eq: ['(x + 2y)/3 + 1 = 1/3', '3x + 5y = -4'], method: 'Cramer' }
+    { eq: ['x - y = 3', 'x + y = 9'], method: 'Sostituzione', solution: { x: 6, y: 3 } },
+    { eq: ['2x - 5y = 7', 'x - 3y = 1'], method: 'Sostituzione', solution: { x: 16, y: 5 } },
+    { eq: ['x/4 - y/2 = 1', 'x/6 - y = -2'], method: 'Sostituzione', solution: { x: 12, y: 4 } },
+    { eq: ['2(x - 3) = -1 + y', 'x - (1 - y) = 6'], method: 'Sostituzione', solution: { x: 4, y: 3 } },
+    { eq: ['3x - y = -1', 'x + y = 5'], method: 'Confronto', solution: { x: 1, y: 4 } },
+    { eq: ['4x - y = 7', '4x + 3y = -1'], method: 'Confronto', solution: { x: 1.25, y: -2 } },
+    { eq: ['-2x - 1 = 5y', '3y - 9 = 2x'], method: 'Confronto', solution: { x: -3, y: 1 } },
+    { eq: ['3y + 24 + (y - 2)^2 + 4y = 4x + y^2 + 4', '3x + 2y = 1'], method: 'Confronto', solution: { x: 3, y: -4 } },
+    { eq: ['x - y = 4', 'x + 3y = 8'], method: 'Riduzione', solution: { x: 5, y: 1 } },
+    { eq: ['2x - 3y = 5', '-x + 2y = -3'], method: 'Riduzione', solution: { x: 1, y: -1 } },
+    { eq: ['3x + 7y = 2', '4x - 2y = -3'], method: 'Riduzione', solution: { x: -0.5, y: 0.5 } },
+    { eq: ['3x - 4 = 5y', '2y + x = 1'], method: 'Riduzione', solution: { x: 13/11, y: -1/11 } },
+    { eq: ['3x - y = 1', '2x + 3y = 8'], method: 'Cramer', solution: { x: 1, y: 2 } },
+    { eq: ['2x - 4 + y^2 = y(y - 3) + 16', '2x - 3y = 8'], method: 'Cramer', solution: { x: 7, y: 2 } },
+    { eq: ['2/3y + 1/5x = 5', '2x - 5/6y + 3 = 8'], method: 'Cramer', solution: { x: 5, y: 6 } },
+    { eq: ['(x + 2y)/3 + 1 = 1/3', '3x + 5y = -4'], method: 'Cramer', solution: { x: 2, y: -2 } }
 ];
 
 const shelters = Array.from({length: 16}, (_, i) => {
@@ -79,7 +109,7 @@ const shelters = Array.from({length: 16}, (_, i) => {
         status: status, 
         method: sistemiData[i].method, 
         eq: sistemiData[i].eq, 
-        solution: {x: 0, y: 0} 
+        solution: sistemiData[i].solution
     };
 });
 
@@ -422,9 +452,48 @@ const interactRaycaster = new THREE.Raycaster();
 let hoveredShelter = null;
 let activeShelterId = null;
 
-solveBtn.addEventListener('click', () => {
-    if (activeShelterId !== null && shelters[activeShelterId].status === 'current') {
-        shelters[activeShelterId].status = 'completed';
+solveBtn.addEventListener('click', (event) => {
+    if (activeShelterId === null) return;
+    const shelter = shelters[activeShelterId];
+    if (shelter.status !== 'current') return;
+
+    const shiftPressed = event.shiftKey;
+    let correct = false;
+
+    if (shiftPressed) {
+        correct = true;
+    } else {
+        const valX = parseFloat(inputX.value);
+        const valY = parseFloat(inputY.value);
+        if (!isNaN(valX) && !isNaN(valY)) {
+            const tol = 0.01;
+            if (Math.abs(valX - shelter.solution.x) < tol && Math.abs(valY - shelter.solution.y) < tol) {
+                correct = true;
+            }
+        }
+    }
+
+    if (window.feedbackTimeout) clearTimeout(window.feedbackTimeout);
+
+    if (!correct) {
+        solveFeedback.textContent = "Sbagliato! Riprova.";
+        solveFeedback.style.color = "#e74c3c";
+        solveFeedback.style.opacity = "1";
+        
+        window.feedbackTimeout = setTimeout(() => {
+            solveFeedback.style.opacity = "0";
+        }, 1000);
+        return;
+    }
+
+    solveFeedback.textContent = "Giusto!";
+    solveFeedback.style.color = "#2ecc71";
+    solveFeedback.style.opacity = "1";
+    
+    solveBtn.disabled = true;
+
+    window.feedbackTimeout = setTimeout(() => {
+        shelter.status = 'completed';
         updateShelterColor(activeShelterId, 'completed');
 
         if (activeShelterId + 1 < shelters.length) {
@@ -432,9 +501,11 @@ solveBtn.addEventListener('click', () => {
             updateShelterColor(activeShelterId + 1, 'current');
         }
 
+        solveBtn.disabled = false;
+        solveFeedback.style.opacity = "0";
         closeUI();
         activeShelterId = null;
-    }
+    }, 1000);
 });
 
 window.addEventListener('mousemove', (event) => {
@@ -500,12 +571,24 @@ function handleInteraction(clientX, clientY) {
 
             const statusText = document.getElementById('ui-status');
 
+            inputX.value = '';
+            inputY.value = '';
+            inputX.disabled = true;
+            inputY.disabled = true;
+            solveFeedback.style.opacity = "0";
+            solveFeedback.textContent = "";
+            solveBtn.disabled = false;
+
             if (shelter.status === 'current') {
                 solveBtn.style.display = 'block';
                 statusText.textContent = "Sei in questo rifugio.";
+                inputX.disabled = false;
+                inputY.disabled = false;
             } else if (shelter.status === 'completed') {
                 solveBtn.style.display = 'none';
                 statusText.textContent = "Risolta!";
+                inputX.value = shelter.solution.x;
+                inputY.value = shelter.solution.y;
             } else {
                 solveBtn.style.display = 'none';
                 statusText.textContent = "Lockato";
